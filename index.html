@@ -46,5 +46,6 @@ $('rentalForm').onsubmit=async e=>{e.preventDefault();const cid=$('rentalClient'
 window.returnRental=async id=>{if(!confirm('Confermi il rientro del materiale?'))return;try{await run(sb.from('noleggi').update({stato:'rientrato'}).eq('id',id));await loadAll();msg('Rientro registrato.')}catch(e){msg('Errore durante il rientro: '+e.message,true)}};
 $('loginForm').onsubmit=async e=>{e.preventDefault();$('loginMsg').textContent='Accesso in corso…';try{const {error}=await sb.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});if(error)throw error;$('loginMsg').textContent='';await showApp()}catch(err){$('loginMsg').textContent='Accesso non riuscito: '+err.message}};
 async function showApp(){const {data:{session}}=await sb.auth.getSession();if(!session){$('loginView').classList.remove('hidden');$('appView').classList.add('hidden');$('logoutBtn').classList.add('hidden');$('userLabel').textContent='';return}$('loginView').classList.add('hidden');$('appView').classList.remove('hidden');$('logoutBtn').classList.remove('hidden');$('userLabel').textContent=session.user.email||'';await loadAll()}
-$('logoutBtn').onclick=async()=>{await sb.auth.signOut();await showApp()};sb.auth.onAuthStateChange(()=>{setTimeout(showApp,0)});showApp();
+$('logoutBtn').onclick=async()=>{await sb.auth.signOut();await showApp()};
+showApp();
 </script></body></html>
