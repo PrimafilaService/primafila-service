@@ -82,10 +82,20 @@ function addRentalItem(){const row=document.createElement('div');row.className='
 $('addRentalItem').onclick=addRentalItem;addRentalItem();
 $('rentalForm').onsubmit=async e=>{e.preventDefault();const cid=$('rentalClient').value,start=$('rentalStart').value,end=$('rentalEnd').value;let newRentalId=null;let materialsSaved=false;try{
  if(!cid||!start||!end)throw Error('Compila cliente e date.');if(end<start)throw Error('La data di rientro non può precedere quella di uscita.');
+ // Rilegge i dati dal database immediatamente prima del controllo, così da non usare una disponibilità rimasta in memoria.
+ const [freshArticles,freshRentals,freshMaterials]=await Promise.all([
+  run(sb.from('articoli').select('*')),
+  run(sb.from('noleggi').select('*')),
+  run(sb.from('materiale_noleggiato').select('*'))
+ ]);
+ articles=freshArticles.map(x=>({id:String(x.id),name:x.nome,category:x.categoria||'',qty:Number(x.quantita_totale||0),notes:x.note||''}));
+ rentals=freshRentals;rentalMaterials=freshMaterials;
  const items=[...document.querySelectorAll('#rentalItems .rental-item')].map(row=>({aid:row.querySelector('.rental-item-article').value,qty:Number(row.querySelector('.rental-item-qty').value)}));if(!items.length)throw Error('Aggiungi almeno un articolo.');
  const requested=new Map();for(const item of items){if(!item.aid||!Number.isSafeInteger(item.qty)||item.qty<1)throw Error('Seleziona un articolo e una quantità intera positiva.');requested.set(item.aid,(requested.get(item.aid)||0)+item.qty)}
- const activeIds=new Set(rentals.filter(r=>!['rientrato','completato','annullato'].includes((r.stato||'').toLowerCase())&&r.data_uscita<=end&&r.data_rientro>=start).map(r=>String(r.id)));
- for(const [aid,qty] of requested){const a=articles.find(x=>x.id===aid);if(!a)throw Error('Seleziona un articolo valido.');const used=rentalMaterials.filter(m=>activeIds.has(String(m.noleggio_id))&&String(m.articolo_id)===aid).reduce((sum,m)=>sum+Number(m.quantita||0),0);if(qty>a.qty-used)throw Error(`${a.name}: quantità non disponibile nel periodo. Disponibili: ${Math.max(0,a.qty-used)}.`)}
+ // Regola prudenziale: un noleggio aperto impegna il materiale dalla data di uscita in poi.
+ // La data di rientro prevista non libera la disponibilità: serve la registrazione manuale del rientro.
+ const blockingIds=new Set(rentals.filter(r=>!['rientrato','completato','annullato'].includes((r.stato||'').toLowerCase())&&r.data_uscita&&r.data_uscita<=end).map(r=>String(r.id)));
+ for(const [aid,qty] of requested){const a=articles.find(x=>x.id===aid);if(!a)throw Error('Seleziona un articolo valido.');const used=rentalMaterials.filter(m=>blockingIds.has(String(m.noleggio_id))&&String(m.articolo_id)===aid).reduce((sum,m)=>sum+Number(m.quantita||0),0);const available=Math.max(0,a.qty-used);if(qty>available)throw Error(`${a.name}: quantità non disponibile. In magazzino: ${a.qty}; già impegnati da noleggi non ancora rientrati: ${used}; disponibili: ${available}. Registra prima il rientro dei noleggi precedenti.`)}
  const rr=await run(sb.from('noleggi').insert({cliente_id:Number(cid),nome_evento:$('rentalEvent').value.trim()||null,data_uscita:start,data_rientro:end,stato:'programmato',note:$('rentalNotes').value.trim()||null}).select('id').single());newRentalId=rr.id;
  await run(sb.from('materiale_noleggiato').insert([...requested].map(([aid,qty])=>({noleggio_id:rr.id,articolo_id:Number(aid),quantita:qty,note:null}))));materialsSaved=true;
  e.target.reset();$('rentalItems').innerHTML='';addRentalItem();await loadAll();msg('Noleggio registrato con '+requested.size+' articoli.');
