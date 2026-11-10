@@ -74,6 +74,7 @@ header{display:flex;align-items:center;gap:18px;border-bottom:1.5px solid #17202
 h3{font-size:13px;margin:18px 0 7px}p{white-space:pre-wrap;line-height:1.45;margin:6px 0}
 table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border:1px solid #d5dbe3;padding:7px;text-align:left;vertical-align:top}th{background:#f1f3f6;font-size:9px}
 .totals{width:310px;margin:12px 0 0 auto}.totals td{padding:5px 7px}.totals tr:last-child{font-weight:bold;font-size:13px}
+.acceptance{margin-top:26px;page-break-inside:avoid;break-inside:avoid}.acceptance h3{margin:0 0 14px}.acceptance-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px 24px}.acceptance-field{font-size:10px;color:#273444}.acceptance-line{height:25px;border-bottom:1px solid #667080;margin-top:3px}.acceptance-sign{grid-column:1/-1}.acceptance-sign .acceptance-line{height:34px}
 .footer{position:fixed;bottom:0;left:0;right:0;border-top:1px solid #b8c0ca;padding:5px 2mm 0;text-align:center;font-size:8px;line-height:1.55;color:#394454;background:white;z-index:10}
 @page{size:A4;margin:14mm 14mm 30mm}
 @media print{body{padding:0}.footer{position:fixed;bottom:0;left:0;right:0}}
@@ -90,6 +91,7 @@ ${q.descrizione?'<h3>Descrizione / dettagli</h3><p>'+esc(q.descrizione)+'</p>':'
 <table><thead><tr><th>Descrizione</th><th>Categoria</th><th>Quantità</th><th>Prezzo unit.</th><th>Sconto</th><th>Totale IVA incl.</th></tr></thead><tbody>${lineRows}</tbody></table>
 <table class="totals"><tbody><tr><td>Imponibile</td><td>${money(q.imponibile)}</td></tr><tr><td>Sconti</td><td>${money(q.sconto)}</td></tr><tr><td>IVA</td><td>${money(q.iva_totale)}</td></tr><tr><td>TOTALE</td><td>${money(q.totale)}</td></tr></tbody></table>
 ${q.condizioni?'<h3>Condizioni</h3><p>'+esc(q.condizioni)+'</p>':''}
+<div class="acceptance"><h3>Accettazione del preventivo</h3><div class="acceptance-grid"><div class="acceptance-field">Nome e cognome (o Ragione sociale)<div class="acceptance-line"></div></div><div class="acceptance-field">Cod. Fiscale (o Partita IVA)<div class="acceptance-line"></div></div><div class="acceptance-field acceptance-sign">Firma per accettazione<div class="acceptance-line"></div></div></div></div>
 <div class="footer">PRIMAFILA SERVICE S.R.L. · Contrada Strasatti 1087/b – 91025 Marsala (TP) · Tel. 329-7252010 · info@primafilaservicesrl.it · PEC: primafilaservicesrl@pec.it<br>P.IVA / C.F. 02945140818 · Cod. Univoco ROINDUX · IBAN: IT45A0894625901000000762847</div>
 <script>window.onload=()=>{window.focus();window.print()}<\/script></body></html>`);
   w.document.close();
