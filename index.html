@@ -36,7 +36,7 @@ function render(){ $('statArticles').textContent=articles.length;$('statQty').te
  $('articlesTable').innerHTML=filteredArticles.map(a=>`<tr><td><b>${esc(a.name)}</b></td><td>${esc(a.category)}</td><td>${a.qty}</td><td>${a.price===""?"—":Number(a.price).toLocaleString("it-IT",{style:"currency",currency:"EUR"})}</td><td>${esc(a.notes)}</td><td><button class="btn" onclick="editArticle('${a.id}')">Modifica</button> <button class="btn danger" onclick="deleteArticle('${a.id}')">Elimina</button></td></tr>`).join('')||`<tr><td colspan="6">${articleSearchText?'Nessun prodotto corrisponde alla ricerca.':'Nessun articolo inserito.'}</td></tr>`;
  document.querySelectorAll('#quoteRows .qr-article').forEach(sel=>{const selected=sel.value;sel.innerHTML=quoteArticleOptions();sel.value=selected;});
  $('quoteClient').innerHTML='<option value="">Seleziona cliente</option>'+clients.map(c=>`<option value="${c.id}">${esc(c.nome)}</option>`).join('');
- $('quotesTable').innerHTML=quotes.map(q=>{const c=clients.find(x=>String(x.id)===String(q.cliente_id));const dateFmt=v=>{if(!v)return '—';const d=new Date(v+'T00:00:00');return Number.isNaN(d.getTime())?esc(v):d.toLocaleDateString('it-IT')};const total=Number(q.totale||0).toLocaleString('it-IT',{style:'currency',currency:'EUR'});const status=(q.stato||'bozza').replace('_',' ');return `<tr><td><b>${esc(q.numero)}</b></td><td>${esc(c?.nome||'Cliente non disponibile')}</td><td>${esc(q.titolo_evento||'—')}</td><td>${dateFmt(q.data_evento_inizio)}${q.data_evento_fine&&q.data_evento_fine!==q.data_evento_inizio?' – '+dateFmt(q.data_evento_fine):''}</td><td>${total}</td><td><span class="status ${q.stato==='accettato'?'done':''}">${esc(status)}</span></td><td><button class="btn" onclick="editQuote('${q.id}')">Apri / modifica</button></td></tr>`}).join('')||'<tr><td colspan="7">Nessun preventivo ancora creato.</td></tr>';
+ $('quotesTable').innerHTML=quotes.map(q=>{const c=clients.find(x=>String(x.id)===String(q.cliente_id));const dateFmt=v=>{if(!v)return '—';const d=new Date(v+'T00:00:00');return Number.isNaN(d.getTime())?esc(v):d.toLocaleDateString('it-IT')};const total=Number(q.totale||0).toLocaleString('it-IT',{style:'currency',currency:'EUR'});const status=(q.stato||'bozza').replace('_',' ');return `<tr><td><b>${esc(q.numero)}</b></td><td>${esc(c?.nome||'Cliente non disponibile')}</td><td>${esc(q.titolo_evento||'—')}</td><td>${dateFmt(q.data_evento_inizio)}${q.data_evento_fine&&q.data_evento_fine!==q.data_evento_inizio?' – '+dateFmt(q.data_evento_fine):''}</td><td>${total}</td><td><span class="status ${q.stato==='accettato'?'done':''}">${esc(status)}</span></td><td><button class="btn" onclick="editQuote('${q.id}')">Apri / modifica</button> <button class="btn" onclick="printQuote('${q.id}')">Stampa PDF</button></td></tr>`}).join('')||'<tr><td colspan="7">Nessun preventivo ancora creato.</td></tr>';
  $('clientsTable').innerHTML=clients.map(c=>`<tr><td><b>${esc(c.nome)}</b></td><td>${esc(c.telefono)}</td><td>${esc(c.email)}</td><td>${esc(c.note)}</td><td><button class="btn danger" onclick="deleteClient('${c.id}')">Elimina</button></td></tr>`).join('')||'<tr><td colspan="5">Nessun cliente inserito.</td></tr>';
  $('rentalClient').innerHTML='<option value="">Seleziona cliente</option>'+clients.map(c=>`<option value="${c.id}">${esc(c.nome)}</option>`).join('');document.querySelectorAll('.rental-item-article').forEach(sel=>{const old=sel.value;sel.innerHTML=articleOptions();sel.value=old;});
   const grouped=new Map();for(const m of rentalMaterials){const key=String(m.noleggio_id);if(!grouped.has(key))grouped.set(key,[]);grouped.get(key).push(m)}
@@ -55,6 +55,46 @@ $('addQuoteRow').onclick=addQuoteRow;addQuoteRow();
 $('quoteForm').onsubmit=async e=>{e.preventDefault();let createdId=null;try{const clienteId=$('quoteClient').value;const start=$('quoteStart').value;const end=$('quoteEnd').value;if(!clienteId)throw Error('Seleziona un cliente.');if(start&&end&&end<start)throw Error('La data di fine evento non può precedere quella di inizio.');const year=new Date().getFullYear();const existing=await run(sb.from('preventivi').select('numero').like('numero',`PS-${year}-%`));const max=existing.reduce((m,x)=>{const n=Number(String(x.numero).split('-').pop());return Number.isFinite(n)?Math.max(m,n):m},0);const numero=`PS-${year}-${String(max+1).padStart(4,'0')}`;const rows=readQuoteRows();if(!rows.length)throw Error('Aggiungi almeno una riga al preventivo.');const amounts=quoteAmounts(rows);const wasEditing=!!editingQuoteId;const header={cliente_id:Number(clienteId),titolo_evento:$('quoteTitle').value.trim(),luogo:$('quotePlace').value.trim()||null,data_evento_inizio:start||null,data_evento_fine:end||null,validita_data:$('quoteValidity').value||null,descrizione:$('quoteDescription').value.trim()||null,condizioni:$('quoteConditions').value.trim()||null,note:$('quoteNotes').value.trim()||null,stato:editingQuoteId?$('quoteEditStatus').value:'bozza',...amounts};if(editingQuoteId){await run(sb.from('preventivi').update(header).eq('id',editingQuoteId));await run(sb.from('preventivo_righe').delete().eq('preventivo_id',editingQuoteId));await run(sb.from('preventivo_righe').insert(rows.map(row=>({...row,preventivo_id:editingQuoteId}))));}else{const head=await run(sb.from('preventivi').insert({numero,stato:'bozza',...header}).select('id').single());createdId=head.id;await run(sb.from('preventivo_righe').insert(rows.map(row=>({...row,preventivo_id:createdId}))));}resetQuoteEditor();await loadAll();msg(wasEditing?'Preventivo aggiornato.':'Preventivo '+numero+' creato con '+rows.length+' righe.');}catch(err){if(createdId){try{await run(sb.from('preventivi').delete().eq('id',createdId))}catch(cleanup){msg('Errore nel salvataggio delle righe e nella pulizia del preventivo: '+cleanup.message,true);return}}msg('Impossibile creare il preventivo: '+err.message,true)}};
 $('articleSearch').addEventListener('input',e=>{articleSearchText=e.target.value;render()});
 $('articleSort').addEventListener('change',e=>{articleSortMode=e.target.value;render()});
+
+window.printQuote=async id=>{
+ try{
+  const q=quotes.find(x=>String(x.id)===String(id));if(!q)throw Error('Preventivo non trovato.');
+  const [items]=await Promise.all([run(sb.from('preventivo_righe').select('*').eq('preventivo_id',id).order('ordine'))]);
+  const c=clients.find(x=>String(x.id)===String(q.cliente_id));
+  const dateFmt=v=>{if(!v)return '—';const d=new Date(v+'T00:00:00');return Number.isNaN(d.getTime())?esc(v):d.toLocaleDateString('it-IT')};
+  const money=v=>Number(v||0).toLocaleString('it-IT',{style:'currency',currency:'EUR'});
+  const lineRows=items.map(x=>{const gross=Number(x.quantita||0)*Number(x.prezzo_unitario||0);const net=gross*(1-Number(x.sconto_percentuale||0)/100);const vat=net*Number(x.iva_percentuale||0)/100;return '<tr><td>'+esc(x.descrizione||'')+'</td><td>'+esc(x.categoria||'—')+'</td><td>'+Number(x.quantita||0)+' '+esc(x.unita_misura||'')+'</td><td>'+money(x.prezzo_unitario)+'</td><td>'+Number(x.sconto_percentuale||0).toLocaleString('it-IT')+'%</td><td>'+money(net+vat)+'</td></tr>'}).join('');
+  const w=window.open('','_blank','width=1000,height=800');if(!w)throw Error('Popup bloccato: consenti i popup per questo sito e riprova.');
+  w.document.open();w.document.write(`<!doctype html><html lang="it"><head><meta charset="utf-8"><title>Preventivo ${esc(q.numero)}</title><style>
+*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#17202c;margin:0;padding:15mm 14mm 30mm;font-size:11px}
+header{display:flex;align-items:center;gap:18px;border-bottom:1.5px solid #17202c;padding-bottom:12px;margin-bottom:18px}
+.logo{width:118px;height:76px;object-fit:contain}.brand h1{font-size:19px;margin:0 0 4px}.brand small{color:#596577}
+.doc-title{margin-left:auto;text-align:right}.doc-title h2{font-size:20px;margin:0 0 5px}.muted{color:#596577}
+.meta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}.field{border:1px solid #d5dbe3;padding:8px;min-height:38px}.label{display:block;font-size:9px;color:#596577;text-transform:uppercase;margin-bottom:4px}
+h3{font-size:13px;margin:18px 0 7px}p{white-space:pre-wrap;line-height:1.45;margin:6px 0}
+table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border:1px solid #d5dbe3;padding:7px;text-align:left;vertical-align:top}th{background:#f1f3f6;font-size:9px}
+.totals{width:310px;margin:12px 0 0 auto}.totals td{padding:5px 7px}.totals tr:last-child{font-weight:bold;font-size:13px}
+.footer{position:fixed;bottom:-20mm;left:0;right:0;border-top:1px solid #b8c0ca;padding-top:5px;text-align:center;font-size:7.5px;line-height:1.5;color:#394454;background:white}
+@page{size:A4;margin:14mm 14mm 28mm}
+@media print{body{padding:0}.footer{position:fixed;bottom:-19mm}}
+</style></head><body>
+<header><img class="logo" src="${logo}"><div class="brand"><h1>PRIMAFILA SERVICE S.R.L.</h1><small>Service tecnico · Audio · Luci · Video · Domotica</small></div><div class="doc-title"><h2>PREVENTIVO</h2><b>${esc(q.numero||'')}</b><div class="muted">Data: ${new Date().toLocaleDateString('it-IT')}</div></div></header>
+<div class="meta">
+<div class="field"><span class="label">Cliente</span><b>${esc(c?.nome||'—')}</b><br>${esc(c?.telefono||'')} ${c?.email?'· '+esc(c.email):''}</div>
+<div class="field"><span class="label">Evento</span><b>${esc(q.titolo_evento||'—')}</b><br>${esc(q.luogo||'')}</div>
+<div class="field"><span class="label">Periodo evento</span>${dateFmt(q.data_evento_inizio)} ${q.data_evento_fine?' – '+dateFmt(q.data_evento_fine):''}</div>
+<div class="field"><span class="label">Validità preventivo</span>${dateFmt(q.validita_data)}</div>
+</div>
+${q.descrizione?'<h3>Descrizione / dettagli</h3><p>'+esc(q.descrizione)+'</p>':''}
+<h3>Materiali, servizi e personale</h3>
+<table><thead><tr><th>Descrizione</th><th>Categoria</th><th>Quantità</th><th>Prezzo unit.</th><th>Sconto</th><th>Totale IVA incl.</th></tr></thead><tbody>${lineRows}</tbody></table>
+<table class="totals"><tbody><tr><td>Imponibile</td><td>${money(q.imponibile)}</td></tr><tr><td>Sconti</td><td>${money(q.sconto)}</td></tr><tr><td>IVA</td><td>${money(q.iva_totale)}</td></tr><tr><td>TOTALE</td><td>${money(q.totale)}</td></tr></tbody></table>
+${q.condizioni?'<h3>Condizioni</h3><p>'+esc(q.condizioni)+'</p>':''}
+<div class="footer">PRIMAFILA SERVICE S.R.L. · Contrada Strasatti 1087/b – 91025 Marsala (TP) · Tel. 329-7252010 · info@primafilaservicesrl.it · PEC: primafilaservicesrl@pec.it<br>P.IVA / C.F. 02945140818 · Cod. Univoco ROINDUX · IBAN: IT45A0894625901000000762847</div>
+<script>window.onload=()=>{window.focus();window.print()}<\/script></body></html>`);
+  w.document.close();
+ }catch(err){msg('Impossibile stampare il preventivo: '+err.message,true)}
+};
 window.printRental=id=>{
  const r=rentals.find(x=>String(x.id)===String(id));if(!r){msg('Noleggio non trovato.',true);return}
  const materials=rentalMaterials.filter(x=>String(x.noleggio_id)===String(r.id));
